@@ -1,19 +1,117 @@
-<script>
-  const apiUrl = "https://script.google.com/macros/s/AKfycbyMcUugHpaBjmv6u19Ho56ILLRnT9L5MCdfoGzDf0e2OckFY9eKQW8Mb6gj4RBSBdqcjA/exec";
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    body { background-color: #FFF9F2; font-family: 'Sarabun', sans-serif; }
+    .header { background: #FF8C00; color: white; padding: 40px 20px; text-align: center; border-radius: 0 0 30px 30px; }
+    .main-card { background: white; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); padding: 30px; margin-top: -30px; }
+    .btn-form { background: #FF4500; color: white; border-radius: 8px; text-decoration: none; padding: 6px 15px; font-weight: bold; }
+    .btn-form:hover { background: #CC3700; color: white; }
+    .status-ok { color: #28A745; font-weight: bold; }
+    .status-no { color: #DC3545; font-weight: bold; }
+    #result-area { display: none; margin-top: 20px; }
+    .update-tag { font-size: 0.7rem; color: #ccc; margin-top: 10px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔍 ค้นหาสถานะการกรอกข้อมูล</h1>
+    <p>พิมพ์รหัสนักเรียนเพื่อตรวจสอบความถูกต้อง</p>
+  </div>
 
-  function refreshData() {
-    fetch(apiUrl)
-      .then(response => response.json())
-      .then(res => {
-        // อัปเดตตัวเลขบนหน้าจอ GitHub
-        document.getElementById('total-count').innerText = res.total;
-        document.getElementById('filled-count').innerText = res.filled;
-      })
-      .catch(err => console.error("Error:", err));
-  }
-    
-  window.onload = function() {
-    refreshData();
-    setInterval(refreshData, 30000); 
-  };
-</script>
+  <div class="container mt-4">
+    <div class="main-card">
+      <input type="text" id="searchInput" class="form-control form-control-lg" 
+             placeholder="พิมพ์รหัสประจำตัวนักเรียน ที่นี่..." onkeyup="searchData()">
+      
+      <div id="result-area">
+        <table class="table mt-4">
+          <thead>
+            <tr style="color: #FF8C00;">
+              <th>รหัส</th>
+              <th class="text-center">สถานะ</th>
+              <th class="text-center">ลิงก์กรอกข้อมูล</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+      
+      <div id="no-data" class="text-center mt-5 text-muted">
+        <p>ยังไม่มีการค้นหา... กรุณาพิมพ์ข้อมูลในช่องด้านบน</p>
+      </div>
+      <div class="update-tag" id="last-update">กำลังโหลดข้อมูล...</div>
+    </div>
+  </div>
+
+  <script>
+    let allData = [];
+    // แก้ไขลิงก์ Google Form ของคุณที่นี่
+    const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSeh6_WtUtf3gvquzvjEPwdfoVvRhNhNY16aMNj0l936ccl0Hw/viewform?usp=header"; 
+    // แก้ไขลิงก์ /exec ของคุณที่นี่ (ใส่เฉพาะตอนเอาไปลง GitHub)
+    const apiUrl = "https://script.google.com/macros/s/AKfycbyMcUugHpaBjmv6u19Ho56ILLRnT9L5MCdfoGzDf0e2OckFY9eKQW8Mb6gj4RBSBdqcjA/exec";
+
+    function loadData() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(res => {
+          allData = res;
+          updateUI();
+        }).getStatusData();
+      } else {
+        fetch(apiUrl).then(r => r.json()).then(res => {
+          allData = res;
+          updateUI();
+        });
+      }
+    }
+
+    function updateUI() {
+      if(document.getElementById("searchInput").value) searchData();
+      document.getElementById('last-update').innerText = "อัปเดตล่าสุด: " + new Date().toLocaleTimeString();
+    }
+
+    function searchData() {
+      const query = document.getElementById("searchInput").value.trim().toUpperCase();
+      const resultArea = document.getElementById("result-area");
+      const noData = document.getElementById("no-data");
+      const tableBody = document.getElementById("table-body");
+
+      if (query.length < 1) {
+        resultArea.style.display = "none";
+        noData.style.display = "block";
+        return;
+      }
+
+      const filtered = allData.filter(item => item.name.toUpperCase().includes(query));
+      
+      if (filtered.length > 0) {
+        resultArea.style.display = "block";
+        noData.style.display = "none";
+        tableBody.innerHTML = "";
+        filtered.forEach(item => {
+          const isDone = item.status.includes('✅');
+          const row = `<tr>
+            <td class="align-middle">${item.name}</td>
+            <td class="text-center align-middle ${isDone ? 'status-ok' : 'status-no'}">${item.status}</td>
+            <td class="text-center">
+              ${isDone ? '✔️' : `<a href="${formUrl}" target="_blank" class="btn-form">กรอก</a>`}
+            </td>
+          </tr>`;
+          tableBody.insertAdjacentHTML('beforeend', row);
+        });
+      } else {
+        tableBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">ไม่พบข้อมูล</td></tr>';
+      }
+    }
+
+    window.onload = () => {
+      loadData();
+      setInterval(loadData, 30000); // รีเฟรชอัตโนมัติทุก 30 วินาที
+    };
+  </script>
+</body>
+</html>
